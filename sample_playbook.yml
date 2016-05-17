@@ -1,10 +1,19 @@
 ---
-- hosts: localhost
+- hosts: controllerBox
   vars_files:
     - credentials.yml
   vars:
     tags: '{"Name":"sample_instance"}'
   tasks:
+    - name: Create Security group
+      ec2_group:
+        aws_secret_key: "{{ aws_secret_key }}"
+        aws_access_key: "{{ aws_access_key }}"
+        name: "sample"
+        description: "security rules for sample_instance"
+        vpc_id: "vpc-f720e893"
+        region: "us-east-1"
+
     - name: Spin up instance
       ec2:
         aws_secret_key: "{{ aws_secret_key }}"
@@ -16,30 +25,31 @@
         count_tag: "{{ tags }}"
         exact_count: 1
         assign_public_ip: yes
+        group: sample
         wait: yes
+        key_name: "sharedKey"
         vpc_subnet_id: subnet-86167fde        
       register: created_instances
 
     - name: Add host to the group
       add_host:
-        groupname=ec2hosts
-        instance_tags="{{item.tags}}"
+        hostname="{{ item.public_dns_name }}"
+        groupname="webServers"
+        instance_tags="{{ item.tags }} "
         ansible_user=ec2-user
-        ansible_ssh_host=localhost
+        ansible_ssh_host="{{item.public_dns_name}}"
         ansible_ssh_port=22
         ansible_ssh_private_key_file=".keys/sharedKey.pem"
-      with_items: created_instances.instances
+      with_items: created_instances.tagged_instances
     
     - name: Wait for SSH to come up
-      local_action:
-        wait_for host="{{item.public_dns}}"
+      wait_for:
+        host="{{ item.public_dns_name }}"
         port=22
-        delay=10
-        timeout=240
         state=started
-      with_items: created_instances.instances
+      with_items: created_instances.tagged_instances
 
-- hosts: ec2hosts
-  tasks:
-    - name: Install package
-      yum: name=wget state=present
+- hosts: webServers
+  become: yes
+  roles:
+    - webServer

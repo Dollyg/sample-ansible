@@ -1,0 +1,8 @@
+- name: Install apache
+  yum: name=httpd state=present
+
+- name: Deploy App
+  copy: src=index.html dest=/var/www/html/ mode=644  owner=root group=root
+
+- name: Start apache
+  service: name=httpd state=started
